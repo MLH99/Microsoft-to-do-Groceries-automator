@@ -54,6 +54,8 @@ headers = {
     "Content-Type": "application/json"
 }
 
+#task data should be a aegument variable for this function using the same style 
+# and type as below
 task_data = {"title": "test"}
 url = f"https://graph.microsoft.com/v1.0/me/todo/lists/{TODO_LIST_ID}/tasks"
 response = requests.post(url, headers=headers, json=task_data)
