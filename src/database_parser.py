@@ -6,7 +6,7 @@ be a choice. After adding or chaing a recipe you can press OK to apply the chang
 a message which tells you if it succeded or not. You should also have an option to see the current recipes.
 So you can choose which one to view and edit. The editing should not be done one at a time.
 Instead you should be able to click on a table and change its contents."""
-from database_connector import DatabaseConnector
+from src.database_connector import DatabaseConnector
 
 class DatabaseParser():
 
@@ -33,7 +33,7 @@ class DatabaseParser():
     
     def add_recipe(self, recipe_name: str, ingredients: dict):
 
-        self.db_connector(recipe_name, ingredients)
+        self.db_connector.insert_recipe_ingredients(recipe_name, ingredients)
 
         
     

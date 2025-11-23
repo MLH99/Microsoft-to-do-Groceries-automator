@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+from src.database_parser import DatabaseParser
 
 # ---------------------- Custom Styles ---------------------- #
 def setup_styles():
@@ -25,6 +26,7 @@ class RecipeGUI:
         self.root.geometry("950x700")
         self.root.configure(bg="#fdf6e3")
 
+        self.db_parser = DatabaseParser()
         setup_styles()
         self.create_main_menu()
 
@@ -116,15 +118,22 @@ class RecipeGUI:
                 "position": pos_val
             })
 
+        ingredients_dict = {}
+        for ing in ingredients:
+            ingredients_dict[ing["name"]] = (float(ing["amount"]), ing["unit"], float(ing["position"]))
+            
         # TODO: Replace this with backend integration
-        
 
+        self.db_parser.add_recipe(recipe_name, ingredients_dict)
+        
+        
+        
         # This is where you would save 'recipe_name' and 'ingredients' to your database or file
         print("Saving recipe:", recipe_name)
         print("Ingredients:", ingredients)
 
         # use database_parser class to send the info to the database
-
+        
         # wait for answer by controlling the database with databaseparser where you controll
         # the recipe name and the ingredients
 

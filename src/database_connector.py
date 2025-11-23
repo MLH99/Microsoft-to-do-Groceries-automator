@@ -12,8 +12,8 @@ db = mysql.connector.connect(host=os.getenv("DB_HOST"),
 db.autocommit = True
 mycursor = db.cursor(dictionary=True)
 
-class database_connector():
-    def get_recipes():
+class DatabaseConnector():
+    def get_recipes(self):
         
         sql = "SELECT name FROM recipes"
         
@@ -30,7 +30,7 @@ class database_connector():
         
         return [r[0] for r in mycursor.fetchall()]
 
-    def get_recipe_ingredients():
+    def get_recipe_ingredients(self):
         
         sql = (
         "SELECT recipes.name AS recipe_name, "
@@ -49,7 +49,7 @@ class database_connector():
 
 
     # MIGHT BE UNNECCESSARY SINCE MYSQL TABLE ALREADY HAS UNIQUE ON RECIPE NAMES
-    def check_recipe(recipe_name: str):
+    def check_recipe(self, recipe_name: str):
         
         sql = "SELECT name FROM recipes WHERE name = %s"
         
@@ -59,7 +59,7 @@ class database_connector():
         
         return bool(result)
 
-    def insert_recipe(recipe_name: str):
+    def insert_recipe(self, recipe_name: str):
         
         
         sql = "INSERT IGNORE INTO recipes (name) VALUES (%s)"
@@ -68,7 +68,7 @@ class database_connector():
         
         return
 
-    def insert_ingredients(ingredients: dict):
+    def insert_ingredients(self, ingredients: dict):
         
         sql = "INSERT IGNORE INTO ingredients (name, position) VALUES (%s, %s)"
         
@@ -132,11 +132,11 @@ class database_connector():
     """ingredients should be a dict that contains dicts with the ingredient name as a key, then 
     the values should be a tuple with  amount as float, unit as a string and position as an float"""
 
-    ingredients = {
+"""    ingredients = {
         "kol": (1, "huvud", 0.5),
         "nötfärs": (500, "gram", 1.2)
     }
 
     recipe_name = "koldolmar"
 
-    insert_recipe_ingredients(recipe_name, ingredients)
+    insert_recipe_ingredients(recipe_name, ingredients)"""
