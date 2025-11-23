@@ -2,7 +2,7 @@ CREATE database recipe_and_ingredients;
 
 USE recipe_and_ingredients;
 
-SHOW TABLES
+SHOW TABLES;
 
 CREATE TABLE ingredients(
     i_id INT AUTO_INCREMENT PRIMARY KEY,

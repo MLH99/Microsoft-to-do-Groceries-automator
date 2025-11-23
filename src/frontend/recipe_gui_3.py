@@ -50,28 +50,39 @@ class RecipeGUI:
         form_frame = tk.Frame(self.root, bg="#e8f5e9")
         form_frame.pack(pady=10)
 
+        # Recipe Name
         ttk.Label(form_frame, text="Recipe Name:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.recipe_name_var = tk.StringVar()
-        ttk.Entry(form_frame, textvariable=self.recipe_name_var, width=30).grid(row=0, column=1, padx=5, pady=5)
+        ttk.Entry(form_frame, textvariable=self.recipe_name_var, width=40).grid(row=0, column=1, padx=5, pady=5, columnspan=4)
 
-        ttk.Label(form_frame, text="Ingredients:").grid(row=1, column=0, padx=5, pady=5, sticky="nw")
+        # Ingredients Frame (headers + entries inside this frame)
         self.ingredients_frame = tk.Frame(form_frame, bg="#e8f5e9")
-        self.ingredients_frame.grid(row=1, column=1, padx=5, pady=5)
+        self.ingredients_frame.grid(row=1, column=0, columnspan=5, pady=10)
+
+        # Header row
+        ttk.Label(self.ingredients_frame, text="Ingredient", width=20).grid(row=0, column=0, padx=3, pady=2)
+        ttk.Label(self.ingredients_frame, text="Amount", width=10).grid(row=0, column=1, padx=3, pady=2)
+        ttk.Label(self.ingredients_frame, text="Unit", width=10).grid(row=0, column=2, padx=3, pady=2)
+        ttk.Label(self.ingredients_frame, text="Position", width=10).grid(row=0, column=3, padx=3, pady=2)
+
         self.ingredient_entries = []
         self.add_ingredient_row()
 
         ttk.Button(form_frame, text="Add Another Ingredient", command=self.add_ingredient_row).grid(
-            row=2, column=1, pady=10, sticky="e"
+            row=2, column=3, pady=10, sticky="e"
         )
 
         ttk.Button(self.root, text="OK", command=self.save_recipe).pack(pady=10)
         ttk.Button(self.root, text="Back", command=self.create_main_menu).pack(pady=5)
 
+
+
     def add_ingredient_row(self):
-        row = len(self.ingredient_entries)
+        row = len(self.ingredient_entries) + 1  # +1 because row 0 is header
         ingredient_name = tk.StringVar()
         amount = tk.StringVar()
         unit = tk.StringVar()
+        position = tk.StringVar()
 
         ttk.Entry(self.ingredients_frame, textvariable=ingredient_name, width=20).grid(row=row, column=0, padx=3, pady=2)
         ttk.Entry(self.ingredients_frame, textvariable=amount, width=10).grid(row=row, column=1, padx=3, pady=2)
@@ -81,23 +92,51 @@ class RecipeGUI:
         unit_combo.current(0)
         unit_combo.grid(row=row, column=2, padx=3, pady=2)
 
-        self.ingredient_entries.append((ingredient_name, amount, unit))
+        ttk.Entry(self.ingredients_frame, textvariable=position, width=10).grid(row=row, column=3, padx=3, pady=2)
+
+        self.ingredient_entries.append((ingredient_name, amount, unit, position))
+
 
     def save_recipe(self):
         recipe_name = self.recipe_name_var.get()
-        ingredients = [
-            {"name": e[0].get(), "amount": e[1].get(), "unit": e[2].get()}
-            for e in self.ingredient_entries
-        ]
+
+        ingredients = []
+        for name, amount, unit, position in self.ingredient_entries:
+            pos = position.get()
+            try:
+                pos_val = float(pos) if pos else 0.0
+            except ValueError:
+                messagebox.showerror("Invalid position", "Position must be a number.")
+                return
+
+            ingredients.append({
+                "name": name.get(),
+                "amount": amount.get(),
+                "unit": unit.get(),
+                "position": pos_val
+            })
+
         # TODO: Replace this with backend integration
+        
 
-        # 
+        # This is where you would save 'recipe_name' and 'ingredients' to your database or file
+        print("Saving recipe:", recipe_name)
+        print("Ingredients:", ingredients)
 
-        success = True
+        # use database_parser class to send the info to the database
+
+        # wait for answer by controlling the database with databaseparser where you controll
+        # the recipe name and the ingredients
+
+        # if above is true set success to true otherwise to false
+
+        success = True  # placeholder
         if success:
             messagebox.showinfo("Success", f"Recipe '{recipe_name}' saved successfully!")
         else:
             messagebox.showerror("Error", "Failed to save recipe.")
+
+
 
     # ---------------------- Edit Recipe ---------------------- #
     def edit_recipe_screen(self):
@@ -222,3 +261,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = RecipeGUI(root)
     root.mainloop()
+x

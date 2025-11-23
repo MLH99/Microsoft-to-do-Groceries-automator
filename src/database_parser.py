@@ -22,9 +22,22 @@ class DatabaseParser():
 
         return recipe_names
     
-    def get_recipe_ingredients(recipe_name: str):
+    def get_recipe_ingredients(self, recipe_name: str):
         
+        recipe_ingredients = self.db_connector.get_recipe_ingredients(recipe_name)
+
+        if recipe_ingredients:
+            return recipe_ingredients
+        else:
+            return False
+    
+    def add_recipe(self, recipe_name: str, ingredients: dict):
+
+        self.db_connector(recipe_name, ingredients)
+
         
+    
+
 
 
 
