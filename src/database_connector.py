@@ -13,15 +13,35 @@ db.autocommit = True
 mycursor = db.cursor(dictionary=True)
 
 class DatabaseConnector():
-    def get_recipes(self):
-        
-        sql = "SELECT name FROM recipes"
-        
+    #---------------------- Getters ----------------------#
+    def get_recipes(self): 
+        """Return list of recipe names."""
+        sql = "SELECT name FROM recipes ORDER BY name"
         mycursor.execute(sql)
-        
-        return [r[0] for r in mycursor.fetchall()]
+        rows = mycursor.fetchall()
+        return [r["name"] for r in rows]
 
+    def get_recipe_for_edit(self, recipe_name: str):
+        """
+        Returns full ingredient info for one recipe.
+        Output format:
+        [
+          {"name": "flour", "amount": 500, "unit": "g", "position": 1.0},
+          ...
+        ]
+        """
+        sql = """
+        SELECT i.name, ri.amount, ri.unit, i.position
+        FROM recipes r
+        JOIN recipe_ingredients ri ON r.r_id = ri.r_id
+        JOIN ingredients i ON i.i_id = ri.i_id
+        WHERE r.name = %s
+        ORDER BY i.position ASC
+        """
+        mycursor.execute(sql, (recipe_name,))
+        return mycursor.fetchall()
 
+    """Maybe unnecessary since it doesnt really do anything for us"""
     def get_ingredients(self, recipe_name: str):
         
         sql = "SELECT name, amount FROM ingredients where name = %s"
@@ -32,111 +52,108 @@ class DatabaseConnector():
 
     def get_recipe_ingredients(self):
         
-        sql = (
-        "SELECT recipes.name AS recipe_name, "
-        "GROUP_CONCAT(ingredients.name SEPARATOR ', ') AS ingredients "
-        "FROM recipes "
-        "JOIN recipe_ingredients ON recipes.r_id = recipe_ingredients.r_id "
-        "JOIN ingredients ON ingredients.i_id = recipe_ingredients.i_id "
-        "GROUP BY recipes.name"
-        )
+        sql ="""
+        SELECT r.name AS recipe_name,
+        GROUP_CONCAT(i.name ORDER BY i.position SEPARATOR ', ') AS ingredients
+        FROM recipes r
+        JOIN recipe_ingredients ri ON r.r_id = ri.r_id
+        JOIN ingredients i ON i.i_id = ri.i_id
+        GROUP BY r.name
+        ORDER BY r.name
+        """
         
         mycursor.execute(sql)
+        rows =  mycursor.fetchall()
+        return rows
         
-        results =  mycursor.fetchall()
-        
-        return [{'recipe_name': r[0], 'ingredients': r[1]} for r in results]
-
 
     # MIGHT BE UNNECCESSARY SINCE MYSQL TABLE ALREADY HAS UNIQUE ON RECIPE NAMES
     def check_recipe(self, recipe_name: str):
-        
         sql = "SELECT name FROM recipes WHERE name = %s"
-        
         mycursor.execute(sql, (recipe_name,))
-        
         result = mycursor.fetchone()
-        
         return bool(result)
-
+    #---------------------- Inserts ----------------------#
     def insert_recipe(self, recipe_name: str):
-        
-        
-        sql = "INSERT IGNORE INTO recipes (name) VALUES (%s)"
-        
+        sql = "INSERT IGNORE INTO recipes (name) VALUES (%s)"  
         mycursor.execute(sql, (recipe_name,))
-        
-        return
 
     def insert_ingredients(self, ingredients: dict):
-        
+        """
+        parameter ingredient_positions = {name: position}
+        """
         sql = "INSERT IGNORE INTO ingredients (name, position) VALUES (%s, %s)"
-        
-        data = list(ingredients.items()) ## ask chat if this works instead
-        mycursor.executemany(sql, data)
-        
-        return
+        ingredient_list = [(name, pos) for name, pos in ingredients.items()]
+        mycursor.executemany(sql, ingredient_list)
 
     """ingredients should be a dict that contains dicts with the ingredient name as a key, then 
     the values should be a tuple with  amount as float, unit as a string and position as an float"""
 
-    # currently has bugs below
     def insert_recipe_ingredients(self, recipe_name: str, ingredients: dict):
-        
-        # start with inserting the recipe name in recipe table
-        
+        """
+        ingredients should be a dict that contains tuples with the ingredient name as a key,
+        and the tuple contains: (amount as float, unit as str, position as float)
+        """
+        # Insert recipe first
         self.insert_recipe(recipe_name)
         
-        # Then insert the ingredients in the ingredient list if they dont exist
-        # i need to make the ingredient list a dict with name as key and position as value
-        ingredient_list = dict()
-        for ingredient in ingredients:
-            ingredient_list[ingredient] = ingredients[ingredient][2]
+        # Insert ingredients with positions
+        # Extract the position (3rd element in tuple) for insert_ingredients
+        self.insert_ingredients({name: details[2] for name, details in ingredients.items()})
         
-        self.insert_ingredients(ingredient_list)
+        # Prepare SQL to link recipe with ingredients
+        sql = """
+        INSERT INTO recipe_ingredients (r_id, i_id, amount, unit)
+        VALUES (
+            (SELECT r_id FROM recipes WHERE name = %s),
+            (SELECT i_id FROM ingredients WHERE name = %s),
+            %s,
+            %s
+        )
+        ON DUPLICATE KEY UPDATE amount = VALUES(amount), unit = VALUES(unit)
+        """
         
-        # lastly insert all of it into recipe_ingredients
+        # Prepare list of values for insertion
+        recipe_ingredient_list = [
+            (recipe_name, name, details[0], details[1])  # amount = details[0], unit = details[1]
+            for name, details in ingredients.items()
+        ]
         
-        # get recipe id (r_id) from recipe table
+        # Execute SQL for each ingredient
+        for item in recipe_ingredient_list:
+            mycursor.execute(sql, item)
         
+
+    
+    # ---------------------------- EDIT SYSTEM ---------------------------- #
+
+    def delete_recipe_ingredients(self, recipe_name: str):
+        """Remove existing ingredient links for a recipe."""
         sql = "SELECT r_id FROM recipes WHERE name = %s"
-        
-        mycursor.execute(sql, (recipe_name, ))
-        
-        r_id = mycursor.fetchone()["r_id"]
-        
+        mycursor.execute(sql, (recipe_name,))
+        row = mycursor.fetchone()
 
-        # insert one ingredient at the time
-        
-        for ingredient in ingredients:
-            # get amount
-            ingredient_name = ingredient
-            ingredient = ingredients[ingredient]
-            amount = ingredient[0]
-            # get unit
-            unit = ingredient[1]
-            
-            # get i_id
-            sql = "SELECT i_id FROM ingredients WHERE name = %s"
-            
-            mycursor.execute(sql, (ingredient_name, ))
-            
-            i_id = mycursor.fetchone()["i_id"]
-            
-            sql = "INSERT IGNORE INTO recipe_ingredients VALUES (%s, %s, %s, %s)"
-            
-            mycursor.execute(sql, (r_id, i_id, amount, unit))
-            
-        return
+        if not row:
+            return False
 
-    """ingredients should be a dict that contains dicts with the ingredient name as a key, then 
-    the values should be a tuple with  amount as float, unit as a string and position as an float"""
+        r_id = row["r_id"]
 
-"""    ingredients = {
-        "kol": (1, "huvud", 0.5),
-        "nötfärs": (500, "gram", 1.2)
-    }
+        del_sql = "DELETE FROM recipe_ingredients WHERE r_id = %s"
+        mycursor.execute(del_sql, (r_id,))
+        return True
 
-    recipe_name = "koldolmar"
+    def edit_recipe(self, recipe_name: str, new_ingredients: dict):
+        """
+        Completely replaces a recipe's ingredients with new data.
 
-    insert_recipe_ingredients(recipe_name, ingredients)"""
+        new_ingredients format:
+            { "flour": (500, "g", 1.0), ... }
+        """
+
+        # 1. Remove old ingredient links
+        self.delete_recipe_ingredients(recipe_name)
+
+        # 2. Reinsert everything
+        self.insert_recipe_ingredients(recipe_name, new_ingredients)
+
+        return True

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, simpledialog
 from src.database_parser import DatabaseParser
 
 # ---------------------- Custom Styles ---------------------- #
@@ -156,7 +156,9 @@ class RecipeGUI:
         ttk.Label(self.root, text="Select Recipe:").pack()
         self.selected_recipe = tk.StringVar()
         self.recipe_dropdown = ttk.Combobox(self.root, textvariable=self.selected_recipe, width=30)
-        self.recipe_dropdown["values"] = ["Pancakes", "Spaghetti Bolognese", "Chocolate Cake"]  # TODO: Load from backend
+        # get the recipe names
+        recipe_names = self.db_parser.get_recipe_names()
+        self.recipe_dropdown["values"] = [name for name in recipe_names]  # TODO: Load from backend
         self.recipe_dropdown.pack(pady=5)
 
         ttk.Button(self.root, text="Load Recipe", command=self.load_recipe_to_edit).pack(pady=10)
@@ -167,21 +169,35 @@ class RecipeGUI:
         self.root.configure(bg="#fff3e0")
         ttk.Label(self.root, text=f"Editing: {self.selected_recipe.get()}", font=("Helvetica", 18, "bold")).pack(pady=10)
 
-        self.table = ttk.Treeview(self.root, columns=("Ingredient", "Amount", "Unit"), show="headings")
+        recipe_ingredients = self.db_parser.get_recipe_for_edit(self.selected_recipe.get())
+
+        if not recipe_ingredients:
+            # Recipe is empty → show warning and only a Back button
+            messagebox.showwarning("Empty Recipe", "This recipe has no ingredients.")
+            ttk.Button(self.root, text="Back", command=self.edit_recipe_screen).pack(pady=10)
+            return
+
+        # Treeview with Position column
+        self.table = ttk.Treeview(self.root, columns=("Ingredient", "Amount", "Unit", "Position"), show="headings")
         self.table.heading("Ingredient", text="Ingredient")
         self.table.heading("Amount", text="Amount")
         self.table.heading("Unit", text="Unit")
+        self.table.heading("Position", text="Position")
         self.table.pack(fill="both", expand=True, padx=20, pady=10)
 
-        example_data = [("Flour", "500", "g"), ("Milk", "2", "dl")]  # TODO: Replace with backend
-        for item in example_data:
-            self.table.insert("", "end", values=item)
+        for item in recipe_ingredients:
+            self.table.insert(
+                "", "end",
+                values=(item["name"], item["amount"], item["unit"], item.get("position", 0))
+            )
 
         ttk.Button(self.root, text="Save Changes", command=self.apply_changes).pack(pady=10)
         ttk.Button(self.root, text="Send to Grocery List", command=self.send_to_grocery_list_edit).pack(pady=5)
-        ttk.Button(self.root, text="Back", command=self.create_main_menu).pack(pady=5)
+        ttk.Button(self.root, text="Back", command=self.edit_recipe_screen).pack(pady=5)
 
         self.table.bind("<Double-1>", self.edit_cell)
+
+
 
     def edit_cell(self, event):
         item = self.table.identify_row(event.y)
@@ -210,6 +226,19 @@ class RecipeGUI:
     def apply_changes(self):
         data = [self.table.item(item, "values") for item in self.table.get_children()]
         # TODO: Send updated data to backend
+        
+        #    def edit_recipe(self, recipe_name: str, new_ingredients: dict):
+        new_ingredients = {}
+        
+        # needs to get the info from the cells and put them in the new_ingredients dict
+        for row in data:
+            name, amount, unit, position = row  # unpack new Position column
+            new_ingredients[name] = (float(amount), unit, float(position))
+
+        
+        self.db_parser.edit_recipe(self.selected_recipe.get(), new_ingredients)
+        
+        
         messagebox.showinfo("Changes Applied", "Recipe updated successfully!")
 
     def send_to_grocery_list_edit(self):
@@ -221,43 +250,125 @@ class RecipeGUI:
         print(f"Sending '{recipe_name}' to grocery list from Edit screen...")
         messagebox.showinfo("Sent!", f"'{recipe_name}' sent to grocery list.")
 
-    # ---------------------- View Recipes ---------------------- #
+     # ---------------------- View Recipes (Updated 2-Column Layout) ---------------------- #
     def view_recipes_screen(self):
         self.clear_window()
         self.root.configure(bg="#e1f5fe")
+
         ttk.Label(self.root, text="Current Recipes", font=("Helvetica", 18, "bold")).pack(pady=15)
 
-        # Example recipe list, replace with backend fetch
-        self.recipes = ["Pancakes", "Spaghetti Bolognese", "Chocolate Cake"]
-        self.selected_recipe_view = tk.StringVar()
+        container = tk.Frame(self.root, bg="#e1f5fe")
+        container.pack(fill="both", expand=True, padx=20, pady=20)
 
-        self.listbox = tk.Listbox(self.root, font=("Helvetica", 14), height=15)
+        # Left Column ---------------------- #
+        left_frame = tk.Frame(container, bg="#e1f5fe")
+        left_frame.pack(side="left", fill="both", expand=True, padx=10)
+
+        ttk.Label(left_frame, text="Available Recipes", font=("Helvetica", 14, "bold")).pack(pady=5)
+
+        self.all_recipes_listbox = tk.Listbox(left_frame, font=("Helvetica", 13), height=20)
+        self.all_recipes_listbox.pack(fill="both", expand=True)
+
+        # TODO: Replace with backend fetch--------------------------------------------------------------------½½½½½½½½½½½½½½-----------------------------
+        # get recipes with db_parser
+        # add them to self.recipes list
+        
+        self.recipes = self.db_parser.get_recipe_names()
         for recipe in self.recipes:
-            self.listbox.insert("end", recipe)
-        self.listbox.pack(fill="both", expand=True, padx=30, pady=20)
-        self.listbox.bind("<<ListboxSelect>>", self.on_recipe_select_view)
+            self.all_recipes_listbox.insert("end", recipe)
 
-        self.send_button_view = ttk.Button(self.root, text="Send to Grocery List", command=self.send_to_grocery_list_view, state="disabled")
-        self.send_button_view.pack(pady=10)
+        ttk.Button(left_frame, text="Add →", command=self.add_recipe_to_temp_list).pack(pady=10)
+
+
+        # Middle Controls (Proportion Selector) ---------------------- #
+        center_frame = tk.Frame(container, bg="#e1f5fe")
+        center_frame.pack(side="left", fill="y", padx=10)
+
+        ttk.Label(center_frame, text="Proportion", font=("Helvetica", 13, "bold")).pack(pady=5)
+
+        self.proportion_var = tk.StringVar(value="1")
+        proportion_box = ttk.Combobox(center_frame, textvariable=self.proportion_var, width=5)
+        proportion_box["values"] = ("1", "2", "3", "Custom")
+        proportion_box.current(0)
+        proportion_box.pack(pady=5)
+
+        ttk.Label(center_frame, text="(Amount multiplied on Add)", font=("Helvetica", 10)).pack(pady=5)
+
+
+        # Right Column ---------------------- #
+        right_frame = tk.Frame(container, bg="#e1f5fe")
+        right_frame.pack(side="left", fill="both", expand=True, padx=10)
+
+        ttk.Label(right_frame, text="Added Recipes", font=("Helvetica", 14, "bold")).pack(pady=5)
+
+        self.added_listbox = tk.Listbox(right_frame, font=("Helvetica", 13), height=20)
+        self.added_listbox.pack(fill="both", expand=True)
+
+        ttk.Button(right_frame, text="← Remove", command=self.remove_recipe_from_temp_list).pack(pady=10)
+
+        ttk.Button(right_frame, text="Save to Grocery List", command=self.finalize_grocery_list).pack(pady=5)
 
         ttk.Button(self.root, text="Back", command=self.create_main_menu).pack(pady=10)
 
-    def on_recipe_select_view(self, event):
-        selection = self.listbox.curselection()
-        if selection:
-            self.selected_recipe_view.set(self.listbox.get(selection[0]))
-            self.send_button_view.config(state="normal")
-        else:
-            self.send_button_view.config(state="disabled")
 
-    def send_to_grocery_list_view(self):
-        recipe_name = self.selected_recipe_view.get()
-        if not recipe_name:
-            messagebox.showwarning("No Recipe Selected", "Please select a recipe first.")
+    # Add recipe from left → right
+    def add_recipe_to_temp_list(self):
+        selection = self.all_recipes_listbox.curselection()
+        if not selection:
             return
-        # FRONTEND ONLY placeholder
-        print(f"Sending '{recipe_name}' to grocery list from View screen...")
-        messagebox.showinfo("Sent!", f"'{recipe_name}' sent to grocery list.")
+
+        recipe = self.all_recipes_listbox.get(selection[0])
+
+        # Proportion handling
+        proportion = self.proportion_var.get()
+        if proportion == "Custom":
+            proportion = simpledialog.askfloat("Custom multiplier", "Enter multiplier:", minvalue=0.1, maxvalue=10)
+            if not proportion:
+                return
+
+        # TODO: Use backend to multiply ingredient amounts before adding to grocery list
+
+        self.added_listbox.insert("end", f"{recipe}  (x{proportion})")
+
+
+    # Remove from right → left
+    def remove_recipe_from_temp_list(self):
+        selection = self.added_listbox.curselection()
+        if not selection:
+            return
+        self.added_listbox.delete(selection[0])
+
+
+    # Final save of everything added on the right side
+    def finalize_grocery_list(self):
+        added_items = self.added_listbox.get(0, "end")
+
+        if not added_items:
+            messagebox.showwarning("Empty", "No recipes added.")
+            return
+
+        # TODO: Perform DB queries to fetch ingredients per recipe
+        # Here we need to send recipes as a dict with recipe name and a list of recipe which can be accessed using db_parser get_recipe_for_edit()
+        # We also need to send proportions as a dict with recipe name and proportion value
+        # This can be gotten be using the proportion from added_items listbox and creating a new dict with the recipe name and its proportions
+        recipes_dict = {}
+        proportions_dict = {}
+        for item in added_items:
+            parts = item.split("  (x")
+            recipe_name = parts[0]
+            proportion = float(parts[1].replace(")", "")) if len(parts) > 1 else 1
+            recipes_dict[recipe_name] = self.db_parser.get_recipe_for_edit(recipe_name)
+            proportions_dict[recipe_name] = proportion
+            
+        # Now we can use db_parsers parse_groceries method to get the final grocery list
+        final_grocery_list = self.db_parser.parse_groceries(recipes_dict, proportions_dict)
+        print("Parsed grocery list:", final_grocery_list)
+        
+        # Now we need to send this to the To_do_list_connector to add the ingredients to the grocery list
+        
+        
+        self.db_parser.add_ingredients_to_to_do_list(final_grocery_list)
+        messagebox.showinfo("Saved!", "Recipes added to grocery list.")
 
     # ---------------------- Utility ---------------------- #
     def clear_window(self):
